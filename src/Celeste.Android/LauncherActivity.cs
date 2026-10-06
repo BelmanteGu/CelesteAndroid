@@ -34,7 +34,6 @@ namespace CelesteAndroid
 		private const int RequestFolder = 1;
 		private const int RequestZip = 2;
 		private const int RequestSaves = 3;
-		private const string PrefDriver = "driver";
 
 		private static readonly Color Night = Color.ParseColor("#120C22");
 		private static readonly Color Accent = Color.ParseColor("#F2B8D8");
@@ -47,13 +46,17 @@ namespace CelesteAndroid
 		private TextView openZip = null!;
 		private TextView importSaves = null!;
 		private TextView driverToggle = null!;
+		private TextView touchToggle = null!;
+		private TextView layoutLink = null!;
+		private LinearLayout settings = null!;
+		private TextView hint = null!;
+		private FrameLayout root = null!;
+		private View? touchOverlay;
 		private LinearLayout links = null!;
 		private LinearLayout progressBox = null!;
 		private ProgressBar progressBar = null!;
 		private TextView progressText = null!;
 		private bool busy;
-
-		private ISharedPreferences Prefs => GetSharedPreferences("launcher", FileCreationMode.Private)!;
 
 		protected override void OnCreate(Bundle? savedInstanceState)
 		{
@@ -96,13 +99,24 @@ namespace CelesteAndroid
 			{
 				RunInstall(installer => installer.ImportEmbedded());
 			}
+			// APK novo com um módulo de patches diferente: o Celeste.dll instalado foi gerado por
+			// um patch antigo e roda sem as correções novas. Refaz o patch (sem reimportar o jogo).
+			else if (!busy && GameInstaller.IsInstalled(this) && !GameInstaller.IsPatchCurrent(this))
+			{
+				RunJob(installer =>
+				{
+					Repatch(installer);
+					RunOnUiThread(LoadArt);
+					return "✓  Game updated for this version";
+				});
+			}
 		}
 
 		#region Layout
 
 		private View BuildLayout()
 		{
-			var root = new FrameLayout(this);
+			root = new FrameLayout(this);
 			root.SetBackgroundColor(Night);
 
 			art = new ImageView(this);
@@ -121,7 +135,11 @@ namespace CelesteAndroid
 			panel = new LinearLayout(this) { Orientation = Orientation.Vertical };
 			panel.SetGravity(GravityFlags.CenterVertical | GravityFlags.Start);
 			panel.SetPadding(Dp(56), Dp(12), Dp(24), Dp(12));
-			root.AddView(panel, new FrameLayout.LayoutParams(Dp(460), ViewGroup.LayoutParams.MatchParent));
+			// 460dp é confortável em tablet, mas estoura a tela de um telefone (~360dp) e o que
+			// passa da borda não pode nem ser tocado: limita à largura visível.
+			int screenWidth = Resources?.DisplayMetrics?.WidthPixels ?? Dp(460);
+			int panelWidth = Math.Min(Dp(460), screenWidth - Dp(16));
+			root.AddView(panel, new FrameLayout.LayoutParams(panelWidth, ViewGroup.LayoutParams.MatchParent));
 
 			// Logo do jogo (art/logo.png → GameArt) ou, sem ele, o nome em texto.
 			int logoId = Resources!.GetIdentifier("celeste_logo", "drawable", PackageName);
@@ -164,12 +182,23 @@ namespace CelesteAndroid
 			importSaves.Click += (_, _) => StartActivityForResult(new Intent(Intent.ActionOpenDocumentTree), RequestSaves);
 			driverToggle = LinkText("");
 			driverToggle.Click += (_, _) => ToggleDriver();
+			touchToggle = LinkText("");
+			touchToggle.Click += (_, _) => ToggleTouch();
+			layoutLink = LinkText("Layout");
+			layoutLink.Click += (_, _) => OpenTouchLayout();
 			links.AddView(openZip);
-			links.AddView(Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal), Margins(left: 10, right: 10));
+			links.AddView(Separator());
 			links.AddView(importSaves);
-			links.AddView(Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal), Margins(left: 10, right: 10));
-			links.AddView(driverToggle);
 			panel.AddView(links, Margins(top: 6, left: 6));
+
+			// Uma linha só não cabe: "Layout" ficava fora da tela e era impossível de tocar.
+			settings = new LinearLayout(this) { Orientation = Orientation.Horizontal };
+			settings.AddView(driverToggle);
+			settings.AddView(Separator());
+			settings.AddView(touchToggle);
+			settings.AddView(Separator());
+			settings.AddView(layoutLink);
+			panel.AddView(settings, Margins(top: 2, left: 6));
 
 			progressBox = new LinearLayout(this) { Orientation = Orientation.Vertical, Visibility = ViewStates.Gone };
 			progressBar = new ProgressBar(this, null, Android.Resource.Attribute.ProgressBarStyleHorizontal) { Max = 1000 };
@@ -180,7 +209,7 @@ namespace CelesteAndroid
 			progressBox.AddView(progressText, Margins(top: 6));
 			panel.AddView(progressBox, Margins(top: 12));
 
-			var hint = Text("Controller recommended", 12, Color.Argb(150, 255, 255, 255), TypefaceStyle.Normal);
+			hint = Text("Controller recommended", 12, Color.Argb(150, 255, 255, 255), TypefaceStyle.Normal);
 			var hintParams = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent,
 				GravityFlags.Bottom | GravityFlags.End) { RightMargin = Dp(28), BottomMargin = Dp(20) };
 			root.AddView(hint, hintParams);
@@ -236,9 +265,14 @@ namespace CelesteAndroid
 			return view;
 		}
 
+		private TextView Separator() =>
+			Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal);
+
 		private TextView LinkText(string text)
 		{
 			var view = Text(text, 14, Accent, TypefaceStyle.Normal);
+			// Sem quebra de linha: "Touch: On" partia em duas linhas e empurrava o resto para fora.
+			view.SetSingleLine(true);
 			view.SetPadding(0, Dp(6), 0, Dp(6));
 			return view;
 		}
@@ -283,6 +317,11 @@ namespace CelesteAndroid
 			importSaves.Enabled = !busy;
 			// A tela é baixa (~360dp): durante a instalação a barra de progresso ocupa o lugar dos links.
 			links.Visibility = busy ? ViewStates.Gone : ViewStates.Visible;
+			settings.Visibility = busy ? ViewStates.Gone : ViewStates.Visible;
+			// "Controller recommended" deixa de fazer sentido com os controles na tela ligados.
+			hint.Visibility = !busy && installed && !LauncherPrefs.TouchControls(this)
+				? ViewStates.Visible
+				: ViewStates.Gone;
 			openFolder.Text = installed ? "Change game files" : "Open game files";
 			if (!busy)
 			{
@@ -290,13 +329,14 @@ namespace CelesteAndroid
 					? "✓  Ready to play"
 					: "Pick the folder of your Celeste PC copy (FNA / \"opengl\" build) or the itch.io .zip.";
 			}
-			driverToggle.Text = "Graphics: " + (Prefs.GetString(PrefDriver, "") == "OpenGL" ? "OpenGL ES" : "Vulkan");
+			driverToggle.Text = "Graphics: " + (LauncherPrefs.Driver(this) == "OpenGL" ? "OpenGL ES" : "Vulkan");
+			touchToggle.Text = "Touch: " + (LauncherPrefs.TouchControls(this) ? "On" : "Off");
 		}
 
 		private void Play()
 		{
 			var intent = new Intent(this, typeof(GameActivity));
-			string? driver = Prefs.GetString(PrefDriver, "");
+			string? driver = LauncherPrefs.Driver(this);
 			if (!string.IsNullOrEmpty(driver))
 				intent.PutExtra(GameActivity.ExtraDriver, driver);
 			StartActivity(intent);
@@ -304,9 +344,109 @@ namespace CelesteAndroid
 
 		private void ToggleDriver()
 		{
-			string next = Prefs.GetString(PrefDriver, "") == "OpenGL" ? "" : "OpenGL";
-			Prefs.Edit()!.PutString(PrefDriver, next)!.Apply();
+			// Vazio = deixa o FNA escolher (SDL_GPU → Vulkan); "OpenGL" força o OpenGL ES.
+			LauncherPrefs.SetDriver(this, LauncherPrefs.Driver(this) == "OpenGL" ? "" : "OpenGL");
 			RefreshState();
+		}
+
+		private void ToggleTouch()
+		{
+			LauncherPrefs.SetTouchControls(this, !LauncherPrefs.TouchControls(this));
+			RefreshState();
+		}
+
+		/// <summary>
+		/// Editor das posições dos controles de toque ("Layout"): mostra a área do jogo e deixa
+		/// arrastar cada controle; o resultado vai para as preferências e o jogo lê pelo AppContext.
+		/// </summary>
+		private void OpenTouchLayout()
+		{
+			if (touchOverlay != null)
+			{
+				return;
+			}
+			TouchLayoutSpec initial = TouchLayoutSpec.TryParse(LauncherPrefs.TouchLayout(this), out TouchLayoutSpec parsed)
+				? parsed
+				: TouchLayoutSpec.Default;
+
+			var editor = new TouchLayoutEditor(this, initial);
+			var overlay = new LinearLayout(this) { Orientation = Orientation.Vertical };
+			overlay.SetBackgroundColor(Color.Argb(247, 18, 12, 34));
+			overlay.SetPadding(Dp(18), Dp(20), Dp(18), Dp(20));
+
+			overlay.AddView(Text("Touch layout", 22, Color.White, TypefaceStyle.Bold));
+			overlay.AddView(
+				Text("Drag each control where you want it. Pause stays visible even when the pad fades; the keyboard button opens the device keyboard so you can type in search boxes.",
+					13, Color.Argb(190, 255, 255, 255), TypefaceStyle.Normal),
+				Margins(top: 6)
+			);
+			overlay.AddView(editor, new LinearLayout.LayoutParams(
+				ViewGroup.LayoutParams.MatchParent, 0, 1f) { TopMargin = Dp(14), BottomMargin = Dp(10) });
+
+			var sizeLabel = Text("", 14, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
+			void ShowSize() => sizeLabel.Text = $"Size: {(int)Math.Round(editor.Scale * 100)}%";
+			ShowSize();
+
+			var sizeRow = new LinearLayout(this) { Orientation = Orientation.Horizontal };
+			var smaller = PillButton("A-", filled: false);
+			smaller.Click += (_, _) =>
+			{
+				editor.Scale -= 0.05f;
+				ShowSize();
+			};
+			var bigger = PillButton("A+", filled: false);
+			bigger.Click += (_, _) =>
+			{
+				editor.Scale += 0.05f;
+				ShowSize();
+			};
+			sizeRow.AddView(smaller, new LinearLayout.LayoutParams(Dp(64), Dp(42)));
+			sizeRow.AddView(sizeLabel, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f)
+			{
+				LeftMargin = Dp(12),
+				TopMargin = Dp(10),
+			});
+			sizeRow.AddView(bigger, new LinearLayout.LayoutParams(Dp(64), Dp(42)));
+			overlay.AddView(sizeRow);
+
+			var actions = new LinearLayout(this) { Orientation = Orientation.Horizontal };
+			var reset = LinkText("Reset");
+			reset.Click += (_, _) =>
+			{
+				editor.Reset();
+				ShowSize();
+			};
+			var mirror = LinkText("Left-handed");
+			mirror.Click += (_, _) => editor.Mirror();
+			var cancel = LinkText("Cancel");
+			cancel.Click += (_, _) => CloseTouchLayout();
+			actions.AddView(reset);
+			actions.AddView(Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal), Margins(left: 10, right: 10));
+			actions.AddView(mirror);
+			actions.AddView(Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal), Margins(left: 10, right: 10));
+			actions.AddView(cancel);
+			actions.AddView(Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal), Margins(left: 10, right: 10));
+			var done = LinkText("Save");
+			done.Click += (_, _) =>
+			{
+				LauncherPrefs.SetTouchLayout(this, editor.Spec.Encode());
+				CloseTouchLayout();
+			};
+			actions.AddView(done);
+			overlay.AddView(actions, Margins(top: 12));
+
+			touchOverlay = overlay;
+			root.AddView(overlay, Match());
+			// O jogo lê o layout ao iniciar: salvar aqui já vale para a próxima partida.
+		}
+
+		private void CloseTouchLayout()
+		{
+			if (touchOverlay is View overlay)
+			{
+				root.RemoveView(overlay);
+			}
+			touchOverlay = null;
 		}
 
 		private void PickFolder()
@@ -343,11 +483,17 @@ namespace CelesteAndroid
 			RunJob(installer =>
 			{
 				import(installer);
-				installer.Patch();
-				installer.PrepareBackground();
+				Repatch(installer);
 				RunOnUiThread(LoadArt);
 				return "✓  Game imported! Ready to play";
 			});
+		}
+
+		/// <summary>Gera o Celeste.dll patcheado e o fundo das faixas laterais (no aparelho).</summary>
+		private static void Repatch(GameInstaller installer)
+		{
+			installer.Patch();
+			installer.PrepareBackground();
 		}
 
 		/// <summary>Roda uma tarefa do instalador fora da thread de UI, com progresso; devolve a mensagem de sucesso.</summary>

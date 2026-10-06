@@ -39,12 +39,12 @@ These are **not** in the repository and must never be committed (they're in `.gi
 | Path | What |
 |---|---|
 | `Celeste/` | Your Celeste PC copy, **FNA build** (`Celeste.exe`, `FNA.dll`, `Content/`). Steam: *opengl* beta. itch.io: Linux zip. Used for compiling the patch module and, optionally, for personal builds. |
-| `fmod/libs/android-arm64/` | `libfmod.so`, `libfmodstudio.so`, `fmod.jar` from the FMOD Engine **1.10.14** Android package (`api/lowlevel/lib/arm64-v8a`, `api/studio/lib/arm64-v8a`, `api/lowlevel/lib/fmod.jar`) |
+| `fmod/libs/android-arm64/` | `libfmod.so`, `libfmodstudio.so`, `fmod.jar` from the FMOD Engine **1.10.14** Android package. It is proprietary, so it is downloaded by hand: create a free account on [fmod.com](https://www.fmod.com/download), sign in → **Download** → **FMOD Engine** → version dropdown **1.10.14 (unsupported)** → **Android** (a `.tar.gz`). `scripts\fetch-fmod.ps1 -Archive <the .tar.gz>` then copies the three arm64 files into place. (In 1.10.x they live at `api/lowlevel/lib/arm64-v8a/libfmod.so`, `api/studio/lib/arm64-v8a/libfmodstudio.so`, `api/lowlevel/lib/fmod.jar`.) |
 | `fmod/libs/win-x64/` | *(desktop host only)* `fmod64.dll` from the Windows package, copied as **both** `fmod.dll` and `fmod64.dll`, plus `fmodstudio64.dll` copied as `fmodstudio.dll` |
 | `art/icon.png` (or `.jpg`) | *(optional)* square image for the app icon, used by every build. Without it, personal builds crop the key art and public builds use the original mountain icon. |
 | `art/logo.png` | *(optional, personal builds)* logo shown in the launcher instead of the text title |
 
-Why 1.10.14: Celeste's `.bank` files were built with FMOD Studio 1.10, and the game's C# FMOD wrapper matches that API.
+Why 1.10.14: FMOD Studio banks are tied to the runtime's version, so Celeste's `.bank` files (built with Studio 1.10) only load under a 1.10.x runtime — a 1.11/2.x `libfmod.so` would fail to load them; the game's C# FMOD wrapper matches that API too.
 
 ## 4. Native libraries
 
@@ -83,10 +83,16 @@ scripts\deploy-android.ps1                 # afterwards: patch + debug APK + pat
 adb logcat -s CelesteAndroid DOTNET SDL SDL/GPU fmod
 ```
 
-The debug build is `run-as`-able, so the script copies files straight into the app's private storage. To regenerate the patch and background on the device without re-importing:
+The debug build is `run-as`-able, so the script copies files straight into the app's private storage (including `patch.stamp`, so the launcher doesn't re-patch what you just pushed). To regenerate the patch and background on the device without re-importing:
 
 ```
 adb shell am start -n org.celesteandroid.celeste/.LauncherActivity --ez repatch true
 ```
 
 To force OpenGL ES: `--es driver OpenGL` on `GameActivity`, or the *Graphics* toggle in the launcher.
+
+## 8. CI (GitHub Actions)
+
+`docs/ci/build-apk.yml` is the release workflow as a template, plus a README with the secret list.
+Move it to `.github/workflows/build-apk.yml` to enable it (see `docs/ci/README.md`); it builds the
+same APKs with the same scripts, either on demand or from a `v*` tag.
