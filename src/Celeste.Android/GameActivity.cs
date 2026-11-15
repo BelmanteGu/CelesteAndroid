@@ -52,6 +52,9 @@ namespace CelesteAndroid
 
 		protected override void OnDestroy()
 		{
+			// O AppContext vive mais que a Activity: sem isto, ele segura a Activity destruída.
+			HostConfig.SoftwareKeyboard = null;
+			HostConfig.SoftwareKeyboardVisible = null;
 			Org.Fmod.FMOD.Close();
 			base.OnDestroy();
 			if (IsFinishing)

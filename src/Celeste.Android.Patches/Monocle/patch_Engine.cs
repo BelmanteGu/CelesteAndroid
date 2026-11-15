@@ -21,8 +21,10 @@ namespace Monocle
 		/// <summary>
 		/// On-screen controls for touch-only devices. They are updated and drawn here because
 		/// this is the one place the port already owns in the game's frame (see RenderCore).
+		/// Created on first use rather than by a field initializer: an initializer in a MonoMod
+		/// patch class depends on its static constructor being merged into Engine's.
 		/// </summary>
-		private static readonly CelesteAndroid.Touch.TouchControls touchControls = new();
+		private static CelesteAndroid.Touch.TouchControls? touchControls;
 
 		[MonoModIgnore]
 		public patch_Engine(int width, int height, int windowWidth, int windowHeight, string windowTitle, bool fullscreen, bool vsync)
@@ -55,7 +57,7 @@ namespace Monocle
 			}
 			// On-screen pad (touch): reads the fingers and draws the controls over the game
 			// image. It is a no-op when the host did not enable touch controls.
-			touchControls.UpdateAndDraw(GraphicsDevice, Viewport);
+			(touchControls ??= new()).UpdateAndDraw(GraphicsDevice, Viewport);
 		}
 
 		private void DrawPillarbox()

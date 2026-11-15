@@ -231,7 +231,10 @@ namespace CelesteAndroid.Touch
 				if (pauseOnly && target != Control.Pause && target != Control.Keyboard)
 				{
 					// Só a pausa e o teclado funcionam no toque que acorda o pad: são ações do
-					// sistema, não comandos do jogo.
+					// sistema, não comandos do jogo. O dedo fica preso a "nada" até ser levantado;
+					// sem isso, no quadro seguinte (pad já aceso) ele seria visto como toque novo e
+					// apertaria o botão que está embaixo dele.
+					grabs[grabCount++] = new Grab(id, Control.None);
 					continue;
 				}
 				grabs[grabCount++] = new Grab(id, target);
@@ -385,6 +388,11 @@ namespace CelesteAndroid.Touch
 				return;
 			}
 			keyDown[index] = pressed;
+			if (pressed && key == GameKey.Tab)
+			{
+				// O FNA transforma o KEY_DOWN de Tab num '\t' de texto; não é digitação.
+				VirtualTyping.ExpectEcho('\t');
+			}
 			if (!SdlInput.PushKey(key, pressed))
 			{
 				FNALoggerEXT.LogWarn?.Invoke("TouchControls: SDL rejected the key event for " + key.Label());

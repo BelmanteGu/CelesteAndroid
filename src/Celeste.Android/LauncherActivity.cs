@@ -101,8 +101,11 @@ namespace CelesteAndroid
 			}
 			// APK novo com um módulo de patches diferente: o Celeste.dll instalado foi gerado por
 			// um patch antigo e roda sem as correções novas. Refaz o patch (sem reimportar o jogo).
-			else if (!busy && GameInstaller.IsInstalled(this) && !GameInstaller.IsPatchCurrent(this))
+			// Uma tentativa por processo: se o patch falhar (ou a assinatura não puder ser lida), não
+			// refaz tudo a cada volta ao launcher — o erro já ficou na tela e o Play continua livre.
+			else if (!busy && !repatchTried && GameInstaller.IsInstalled(this) && !GameInstaller.IsPatchCurrent(this))
 			{
+				repatchTried = true;
 				RunJob(installer =>
 				{
 					Repatch(installer);
@@ -111,6 +114,8 @@ namespace CelesteAndroid
 				});
 			}
 		}
+
+		private static bool repatchTried;
 
 		#region Layout
 

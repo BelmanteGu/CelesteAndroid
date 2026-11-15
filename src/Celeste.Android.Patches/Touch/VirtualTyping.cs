@@ -77,12 +77,67 @@ namespace CelesteAndroid.Touch
 			}
 		}
 
+		/// <summary>
+		/// Ecos esperados. O FNA chama <c>TextInputEXT.OnTextInput</c> com '\b', '\t' e '\r' em todo
+		/// KEY_DOWN de Backspace, Tab e Enter — inclusive nos que nós mesmos injetamos. Sem descontar
+		/// esses ecos, cada tecla injetada voltava como caractere e era injetada de novo, em loop,
+		/// enquanto o teclado estivesse aberto.
+		/// </summary>
+		private static int echoBack, echoTab, echoEnter;
+
+		/// <summary>Avisa que uma tecla injetada vai voltar como este caractere e deve ser ignorada.</summary>
+		internal static void ExpectEcho(char c)
+		{
+			switch (c)
+			{
+				case '\b': echoBack++; break;
+				case '\t': echoTab++; break;
+				case '\r': case '\n': echoEnter++; break;
+			}
+		}
+
+		private static bool TakeEcho(ref int counter)
+		{
+			if (counter <= 0)
+			{
+				return false;
+			}
+			counter--;
+			return true;
+		}
+
 		private static void OnText(char c)
 		{
-			if (c != 0)
+			switch (c)
 			{
-				pending.Enqueue(c);
+				case '\0':
+					return;
+				case '\n':
+					// O SDL entrega o Enter do IME duas vezes: como tecla Return (que o FNA vira '\r')
+					// e como texto "\n". Fica só o '\r'.
+					return;
+				case '\b':
+					if (TakeEcho(ref echoBack)) return;
+					break;
+				case '\t':
+					if (TakeEcho(ref echoTab)) return;
+					break;
+				case '\r':
+					if (TakeEcho(ref echoEnter)) return;
+					break;
 			}
+			if (c < ' ' && pending.Contains(c))
+			{
+				// Mesmo caractere de controle duas vezes no mesmo quadro = tecla + texto do mesmo
+				// toque (o SDL manda os dois para o Tab, por exemplo).
+				return;
+			}
+			if (c < ' ' && c != '\b' && c != '\t' && c != '\r')
+			{
+				// Home, End, Ctrl+V e afins: não são digitação.
+				return;
+			}
+			pending.Enqueue(c);
 		}
 
 		private static bool Press(char c)
@@ -94,6 +149,10 @@ namespace CelesteAndroid.Touch
 			if (shift)
 			{
 				SdlInput.PushScancode(ScanLeftShift, KeyLeftShift, true);
+			}
+			if (c == '\b' || c == '\t' || c == '\r' || c == '\n')
+			{
+				ExpectEcho(c);
 			}
 			SdlInput.PushScancode(scancode, keycode, true);
 			heldScancode = scancode;

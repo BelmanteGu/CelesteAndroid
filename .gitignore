@@ -1,5 +1,6 @@
 # Arquivos do jogo (propriedade da Maddy Makes Games) - NUNCA commitar
 /Celeste/
+/Celeste
 *.exe
 Content/
 
@@ -29,3 +30,6 @@ obj/
 
 # Arte oficial fornecida pelo usuário (logo etc.)
 /art/
+
+# Python
+__pycache__/

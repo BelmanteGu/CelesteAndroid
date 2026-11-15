@@ -31,9 +31,52 @@ namespace CelesteAndroid
 
 		// Cada pedido invalida as verificações do anterior: o jogador pode fechar o teclado antes
 		// de o sistema responder, e um "abre o teclado" atrasado não pode desfazer isso.
-		private int generation;
+		// Escrito na thread do SDL e lido na de UI.
+		private volatile int generation;
 
-		public SoftwareKeyboard(Activity activity) => this.activity = activity;
+		// Visibilidade real do teclado, atualizada na thread de UI a cada passada de layout e lida
+		// pela thread do jogo. IsAcceptingText não serve para isso: ele diz se há um campo ligado ao
+		// IME (o do SDL fica ligado mesmo depois de o jogador fechar o teclado com Voltar).
+		private volatile bool visible;
+
+		public SoftwareKeyboard(Activity activity)
+		{
+			this.activity = activity;
+			try
+			{
+				View? decor = activity.Window?.DecorView;
+				if (decor?.ViewTreeObserver != null)
+				{
+					decor.ViewTreeObserver.GlobalLayout += (_, _) => visible = ImeVisible();
+				}
+			}
+			catch (Exception e)
+			{
+				Log.Warn(GameActivity.LogTag, "teclado: sem acompanhamento de visibilidade: " + e.Message);
+			}
+		}
+
+		/// <summary>Só na thread de UI.</summary>
+		private bool ImeVisible()
+		{
+			try
+			{
+				if (Build.VERSION.SdkInt >= BuildVersionCodes.R)
+				{
+					WindowInsets? insets = activity.Window?.DecorView?.RootWindowInsets;
+					if (insets != null)
+					{
+						return insets.IsVisible(WindowInsets.Type.Ime());
+					}
+				}
+				// Android 8-10: não há pergunta direta; o melhor sinal é haver um campo ligado ao IME.
+				return Manager?.IsAcceptingText ?? false;
+			}
+			catch (Exception)
+			{
+				return false;
+			}
+		}
 
 		private InputMethodManager? Manager
 		{
@@ -70,17 +113,7 @@ namespace CelesteAndroid
 		}
 
 		/// <summary>O teclado está à vista? (lido da thread do jogo)</summary>
-		public bool IsShown()
-		{
-			try
-			{
-				return Manager?.IsAcceptingText ?? false;
-			}
-			catch (Exception)
-			{
-				return false;
-			}
-		}
+		public bool IsShown() => visible;
 
 		private void Run(int id, Action action)
 		{
@@ -107,7 +140,7 @@ namespace CelesteAndroid
 				return;
 			}
 			InputMethodManager ime = maybe;
-			if (ime.IsAcceptingText)
+			if (ImeVisible())
 			{
 				return;
 			}
@@ -124,7 +157,7 @@ namespace CelesteAndroid
 
 			main.PostDelayed(() => Run(id, () =>
 			{
-				if (ime.IsAcceptingText)
+				if (ImeVisible())
 				{
 					Log.Info(GameActivity.LogTag, "teclado: aberto");
 					return;
