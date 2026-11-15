@@ -243,7 +243,7 @@ namespace CelesteAndroid
 			if (!hasFna)
 			{
 				throw new InstallException(
-					"This is the XNA version of Celeste. On Steam, enable the \"opengl\" beta " +
+					"This is the XNA version of Celeste. On Steam, enable the \"fna\" beta " +
 					"(Properties → Betas) and copy the folder again, or use the Linux .zip from itch.io.");
 			}
 		}

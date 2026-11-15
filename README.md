@@ -31,7 +31,7 @@ CelesteAndroid is a launcher + runtime that takes the files of the Celeste PC ve
 
 You need the **FNA build** of the PC version. Its folder contains `Celeste.exe`, **`FNA.dll`** and `Content/`.
 
-- **Steam**: Library → right-click Celeste → *Properties* → *Betas* → pick **`opengl`**. After the update, copy the whole game folder (*Manage → Browse local files*).
+- **Steam**: Library → right-click Celeste → *Properties* → *Betas* → pick **`fna`**. After the update, copy the whole game folder (*Manage → Browse local files*).
   The default Steam build on Windows uses XNA and **won't work** (there's no `FNA.dll`).
 - **itch.io**: the **Linux `.zip`** already is the FNA build. You can import the `.zip` directly.
 
