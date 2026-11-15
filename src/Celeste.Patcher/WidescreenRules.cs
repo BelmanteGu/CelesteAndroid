@@ -4,7 +4,8 @@ namespace CelesteAndroid.Patcher
 	/// Onde o <see cref="WidescreenPass"/> troca constantes. Tokens:
 	/// <list type="bullet">
 	/// <item>i320/f320: largura do jogo; i160/f160/f-160: metade dela (centro da câmera);
-	/// f322: largura + 2 (retângulos que cobrem a tela do jogo com sobra).</item>
+	/// f322/f330/f340/f352/i352: largura + 2/10/20/32 (retângulos e partículas que cobrem a tela do
+	/// jogo com sobra).</item>
 	/// <item>i1920/f1920/f960/i1922: alvo de alta resolução (largura, metade, +2).</item>
 	/// <item>SM: Engine.ScreenMatrix → matriz sem o deslocamento da interface (desenho no espaço largo).</item>
 	/// <item>EW: Engine.Width → 1920 (código que centraliza a interface pela largura da tela).</item>
@@ -60,7 +61,13 @@ namespace CelesteAndroid.Patcher
 			new("Celeste.DustEdges", "*", "f320"),
 			new("Celeste.SeekerEffectsController", "*", "f320"),
 			new("Celeste.Tentacles", "*", "f320", "f160"),
-			new("Celeste.AscendManager", "*", "f320"),
+			new("Celeste.AscendManager", "*", "f320", "f340"),
+			// Base do bloom: Draw.Rect(-10, -10, 340, 200) cobre só até x = 330 (emenda nos caps. 4 e 10).
+			new("Celeste.BloomRenderer", "*", "f340"),
+			new("Celeste.FinalBossStarfield", "*", "f330"),
+			new("Celeste.Petals", "*", "f352", "i352"),
+			new("Celeste.CS10_FinalLaunch", "*", "f322"),
+			new("Celeste.CS10_Farewell", "Render", "f322"),
 			new("Celeste.LightningRenderer", "*", "f320"),
 			new("Celeste.GondolaDarkness", "*", "f322"),
 			new("Celeste.FormationBackdrop", "*", "f322"),

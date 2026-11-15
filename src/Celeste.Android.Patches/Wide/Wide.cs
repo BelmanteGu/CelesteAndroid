@@ -69,6 +69,10 @@ namespace CelesteAndroid
 		public static float FHalfW() => GameWidth / 2f;
 		public static float FNegHalfW() => -GameWidth / 2f;
 		public static float FW2() => GameWidth + 2;
+		public static float FW10() => GameWidth + 10;
+		public static float FW20() => GameWidth + 20;
+		public static float FW32() => GameWidth + 32;
+		public static int IW32() => GameWidth + 32;
 		public static int ITW() => TargetWidth;
 		public static float FTW() => TargetWidth;
 		public static float FHalfTW() => TargetWidth / 2f;

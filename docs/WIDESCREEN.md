@@ -40,6 +40,5 @@ CELESTE_DEV_EXIT_FRAME=2450   # fecha o jogo
 
 ## Limitações conhecidas
 
-- Capítulos 4 e 10: o fundo de nuvens tem uma emenda vertical perto da borda direita (em investigação).
 - O HUD de canto (morangos, cronômetro) fica na borda da área 16:9 central, não na borda da tela.
 - Cenas de corte com a câmera em posições fixas foram pensadas para 320 de largura: algumas mostram mais do cenário do que o planejado.
