@@ -1,9 +1,11 @@
 using System;
+using System.Globalization;
 using System.Reflection;
 using Android.App;
 using Android.Content.PM;
 using Android.OS;
 using Android.Util;
+using Android.Views;
 using Microsoft.Xna.Framework;
 using Org.Libsdl.App;
 
@@ -30,6 +32,9 @@ namespace CelesteAndroid
 		public const string LogTag = "CelesteAndroid";
 		public const string ExtraDriver = "driver";
 
+		// Ponte com o pad para o teclado do sistema (ver SoftwareKeyboard).
+		private SoftwareKeyboard? keyboard;
+
 		// O Java carrega SDL3 e FMOD (o FMOD precisa estar carregado antes do FMOD.init);
 		// FNA3D/FAudio são carregados pelo .NET via DllImport.
 		protected override string[] GetLibraries() => new[] { "SDL3", "fmod", "fmodstudio" };
@@ -39,10 +44,60 @@ namespace CelesteAndroid
 			base.OnCreate(savedInstanceState);
 			// O FMOD no Android precisa do Context para o áudio e para ler arquivos.
 			Org.Fmod.FMOD.Init(this);
+
+			// O pad pede o teclado do sistema por aqui (o caminho do SDL sozinho não abre o teclado
+			// em vários aparelhos — ver SoftwareKeyboard) e pergunta se ele está à vista.
+			keyboard = new SoftwareKeyboard(this);
+			HostConfig.SoftwareKeyboard = keyboard.Set;
+			HostConfig.SoftwareKeyboardVisible = keyboard.IsShown;
+		}
+
+		/// <summary>
+		/// Esc de teclado físico abre a pausa, não fecha o jogo (issue #5). Quando nenhuma view
+		/// trata o Esc, o Android o converte em Voltar (tecla "fallback"), e Voltar encerra a
+		/// Activity. Alguns teclados Bluetooth já mandam Voltar no lugar do Esc. Nos dois casos, o
+		/// Esc vai direto para o SDL.
+		/// </summary>
+		public override bool DispatchKeyEvent(KeyEvent? e)
+		{
+			if (e != null && (e.KeyCode == Keycode.Escape || IsKeyboardBack(e)))
+			{
+				if (e.Action == KeyEventActions.Down)
+				{
+					OnNativeKeyDown((int)Keycode.Escape);
+				}
+				else if (e.Action == KeyEventActions.Up)
+				{
+					OnNativeKeyUp((int)Keycode.Escape);
+				}
+				return true;
+			}
+			return base.DispatchKeyEvent(e);
+		}
+
+		private static bool IsKeyboardBack(KeyEvent e)
+		{
+			if (e.KeyCode != Keycode.Back)
+			{
+				return false;
+			}
+			if ((e.Flags & KeyEventFlags.Fallback) != 0)
+			{
+				return true; // Esc sem dono convertido pelo sistema.
+			}
+			// Voltar vindo de um teclado alfabético de verdade (não a barra de navegação, que é
+			// um dispositivo virtual, nem o botão B de um controle).
+			InputDevice? device = e.Device;
+			return device != null && !device.IsVirtual
+				&& device.KeyboardType == InputKeyboardType.Alphabetic
+				&& (e.Source & InputSourceType.Gamepad) != InputSourceType.Gamepad;
 		}
 
 		protected override void OnDestroy()
 		{
+			// O AppContext vive mais que a Activity: sem isto, ele segura a Activity destruída.
+			HostConfig.SoftwareKeyboard = null;
+			HostConfig.SoftwareKeyboardVisible = null;
 			Org.Fmod.FMOD.Close();
 			base.OnDestroy();
 			if (IsFinishing)
@@ -61,6 +116,18 @@ namespace CelesteAndroid
 			string? driver = Intent?.GetStringExtra(ExtraDriver);
 			if (!string.IsNullOrEmpty(driver))
 				SDL3.SDL.SDL_SetHint("FNA3D_FORCE_DRIVER", driver);
+
+			// Só paisagem (issue #4). A janela do FNA é redimensionável, e sem esta dica o SDL pede
+			// FULL_USER ao Android, sobrescrevendo o SensorLandscape do manifesto.
+			SDL3.SDL.SDL_SetHint("SDL_ORIENTATIONS", "LandscapeLeft LandscapeRight");
+
+			// Cultura invariante (issue #2): alguns pontos do jogo leem/escrevem números com a
+			// cultura do sistema, e com o aparelho em árabe isso derruba o jogo na abertura. No PC o
+			// jogo quase sempre roda em culturas com '.' decimal, então é o comportamento esperado.
+			CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+			CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
+			CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+			CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
 
 			try
 			{

@@ -18,6 +18,30 @@ namespace Monocle
 		private static Texture2D? pillarboxPixel;
 		private static bool pillarboxLoaded;
 
+		/// <summary>
+		/// On-screen controls for touch-only devices. They are updated and drawn here because
+		/// this is the one place the port already owns in the game's frame (see RenderCore).
+		/// Created on first use rather than by a field initializer: an initializer in a MonoMod
+		/// patch class depends on its static constructor being merged into Engine's.
+		/// </summary>
+		private static CelesteAndroid.Touch.TouchControls? touchControls;
+
+		private extern void orig_UpdateView();
+
+		/// <summary>
+		/// Widescreen (ver <see cref="Wide"/>): Engine.Width já é a largura da tela, e a matriz da
+		/// tela ganha o deslocamento que centraliza a interface de 1920 de largura. O que é desenhado
+		/// no espaço largo (a imagem do jogo) usa <see cref="Wide.WorldMatrix"/>, sem o deslocamento.
+		/// </summary>
+		private void UpdateView()
+		{
+			orig_UpdateView();
+			if (Wide.Enabled)
+			{
+				Engine.ScreenMatrix = Matrix.CreateTranslation(Wide.HudOffset, 0f, 0f) * Engine.ScreenMatrix;
+			}
+		}
+
 		[MonoModIgnore]
 		public patch_Engine(int width, int height, int windowWidth, int windowHeight, string windowTitle, bool fullscreen, bool vsync)
 			: base(width, height, windowWidth, windowHeight, windowTitle, fullscreen, vsync)
@@ -47,6 +71,10 @@ namespace Monocle
 				scene.Render();
 				scene.AfterRender();
 			}
+			// On-screen pad (touch): reads the fingers and draws the controls over the game
+			// image. It is a no-op when the host did not enable touch controls.
+			(touchControls ??= new()).UpdateAndDraw(GraphicsDevice, Viewport);
+			DevTools.AfterRender(GraphicsDevice);
 		}
 
 		private void DrawPillarbox()

@@ -29,9 +29,10 @@ namespace CelesteAndroid.Desktop
 				return 0;
 			}
 
-			// Mesmo contrato que o app Android vai usar (ver CelesteAndroid.HostConfig).
-			AppContext.SetData("CelesteAndroid.Platform", "Android");
-			AppContext.SetData("CelesteAndroid.PrefPath", Path.Combine(hostDir, "userdata"));
+			// Mesmo contrato que o app Android vai usar (src/Shared/HostConfig.cs). Sem controles na
+			// tela (touchControls fica no padrão falso): o host é para testar patches no Windows.
+			// Widescreen: CELESTE_ASPECT=2.1667 (19.5:9) ou o tamanho de CELESTE_DEV_WINDOW (ver DevTools).
+			HostConfig.Publish("Android", Path.Combine(hostDir, "userdata"), aspectRatio: DesktopAspect());
 
 			// O FNA procura o Content relativo à pasta-base do app; apontamos para a pasta do jogo.
 			AppContext.SetData("APP_CONTEXT_BASE_DIRECTORY", gameDir + Path.DirectorySeparatorChar);
@@ -51,6 +52,17 @@ namespace CelesteAndroid.Desktop
 				.GetMethod("Main", BindingFlags.NonPublic | BindingFlags.Static)!;
 			main.Invoke(null, new object[] { args });
 			return 0;
+		}
+
+		private static float DesktopAspect()
+		{
+			string? aspect = Environment.GetEnvironmentVariable("CELESTE_ASPECT");
+			if (float.TryParse(aspect, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float value))
+				return value;
+			string[]? window = Environment.GetEnvironmentVariable("CELESTE_DEV_WINDOW")?.Split('x');
+			if (window is { Length: 2 } && int.TryParse(window[0], out int w) && int.TryParse(window[1], out int h) && h > 0)
+				return w / (float)h;
+			return 0f;
 		}
 
 		private static string FindGameDir(string[] args)
