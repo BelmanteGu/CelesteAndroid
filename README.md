@@ -135,7 +135,7 @@ Tested on one device so far. Reports from other phones (especially Mali/Exynos/T
 
 - Celeste © Maddy Makes Games Inc. This project is **not affiliated with or endorsed by** Maddy Makes Games, Extremely OK Games or Firelight Technologies.
 - This repository contains **no** game code or assets. The game is loaded from the user's own copy at runtime.
-- The app icon is pixel-art fan work in Celeste's style, as fan ports commonly use.
+- The released APK's launcher shows Celeste artwork (the logo and an animated Madeline background, © Maddy Makes Games) and a pixel-art strawberry icon, as fan ports commonly do. That artwork isn't in this repository; builds from source use the imported game's key art unless you provide your own.
 - **FMOD**: the released APK includes the FMOD Studio 1.10.14 runtime libraries. *FMOD Studio by Firelight Technologies Pty Ltd.* FMOD isn't open source and is **not** covered by this project's MIT license. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## 💜 Credits

@@ -27,4 +27,4 @@ FMOD isn't open source. The FMOD runtime libraries (`libfmod.so`, `libfmodstudio
 
 ## Celeste
 
-Celeste is © Maddy Makes Games Inc. **None** of its code or assets are included in this repository. The public APK contains only the app icon, a pixel-art strawberry made as fan work (also in `docs/media/icon.png`). Everything else, game code, content and key art, is loaded at runtime from the user's own legally obtained copy.
+Celeste is © Maddy Makes Games Inc. **None** of its code or assets are included in this repository. The public APK contains only launcher artwork: the Celeste logo and an animated Madeline background (fan use; not in this repository) and a pixel-art strawberry icon (also in `docs/media/icon.png`). Everything else, game code, content and key art, is loaded at runtime from the user's own legally obtained copy.
