@@ -18,6 +18,9 @@ namespace CelesteAndroid
 		/// <summary>Controles na tela ("1"/"0"). Ligados por padrão.</summary>
 		public const string TouchKey = "touch";
 
+		/// <summary>Widescreen ("1"/"0"): o jogo ocupa a tela toda em vez de 16:9. Ligado por padrão.</summary>
+		public const string WidescreenKey = "wide";
+
 		/// <summary>Posição dos controles (ver TouchLayoutSpec.Encode); vazio = padrão.</summary>
 		public const string TouchLayoutKey = "touch_layout";
 
@@ -35,6 +38,11 @@ namespace CelesteAndroid
 
 		public static void SetTouchControls(Context context, bool enabled) =>
 			Get(context).Edit()!.PutString(TouchKey, enabled ? "1" : "0")!.Apply();
+
+		public static bool Widescreen(Context context) => Get(context).GetString(WidescreenKey, "1") != "0";
+
+		public static void SetWidescreen(Context context, bool enabled) =>
+			Get(context).Edit()!.PutString(WidescreenKey, enabled ? "1" : "0")!.Apply();
 
 		public static string TouchLayout(Context context) => Get(context).GetString(TouchLayoutKey, "") ?? "";
 

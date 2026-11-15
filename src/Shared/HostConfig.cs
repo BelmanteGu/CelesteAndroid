@@ -23,19 +23,26 @@ namespace CelesteAndroid
 		public const string TouchLayoutKey = "CelesteAndroid.TouchLayout";
 		public const string SoftwareKeyboardKey = "CelesteAndroid.SoftwareKeyboard";
 		public const string SoftwareKeyboardVisibleKey = "CelesteAndroid.SoftwareKeyboardVisible";
+		public const string AspectRatioKey = "CelesteAndroid.AspectRatio";
 
 		/// <summary>Lado do host: publica a configuração lida pelo jogo patcheado.</summary>
 		/// <param name="backgroundPath">Imagem das faixas laterais (opcional; o desktop não usa).</param>
 		/// <param name="touchControls">Controles na tela (ver TouchControls no módulo de patches).</param>
 		/// <param name="touchLayout">Posições dos controles (ver <see cref="TouchLayoutSpec"/>); opcional.</param>
+		/// <param name="aspectRatio">
+		/// Largura/altura da tela para o modo widescreen (ver Wide no módulo de patches); 0 = jogo
+		/// original em 16:9 com faixas nas laterais.
+		/// </param>
 		public static void Publish(
 			string platform,
 			string prefPath,
 			string? backgroundPath = null,
 			bool touchControls = false,
-			string? touchLayout = null
+			string? touchLayout = null,
+			float aspectRatio = 0f
 		)
 		{
+			AppContext.SetData(AspectRatioKey, aspectRatio.ToString(CultureInfo.InvariantCulture));
 			AppContext.SetData(PlatformKey, platform);
 			AppContext.SetData(PrefPathKey, prefPath);
 			if (backgroundPath != null)
@@ -78,6 +85,12 @@ namespace CelesteAndroid
 
 		/// <summary>Controles na tela (toque). Só ligam se o host mandar "1" (ver TouchControls).</summary>
 		public static bool TouchControlsEnabled => AppContext.GetData(TouchControlsKey) as string == "1";
+
+		/// <summary>Proporção pedida para o modo widescreen; 0 (ou ausente) = 16:9 original.</summary>
+		public static float AspectRatio =>
+			float.TryParse(AppContext.GetData(AspectRatioKey) as string, NumberStyles.Float, CultureInfo.InvariantCulture, out float value)
+				? value
+				: 0f;
 
 		/// <summary>Posições dos controles de toque; nulo/vazio = layout padrão.</summary>
 		public static string? TouchLayoutSetting => AppContext.GetData(TouchLayoutKey) as string;

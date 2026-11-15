@@ -36,6 +36,9 @@ namespace CelesteAndroid.Patcher
 			modder.MapDependencies();
 			modder.AutoPatch();
 
+			// Constantes de resolução → valores da tela em uso (o modo é escolhido em runtime).
+			WidescreenPass.Apply(modder.Module, log);
+
 			// O Celeste.exe vem marcado como x86 (32BITREQUIRED); em ARM64/x64 isso impede o carregamento.
 			ModuleDefinition module = modder.Module;
 			module.Attributes &= ~(ModuleAttributes.Required32Bit | ModuleAttributes.Preferred32Bit);

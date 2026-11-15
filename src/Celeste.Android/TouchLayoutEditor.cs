@@ -100,18 +100,24 @@ namespace CelesteAndroid
 			return values;
 		}
 
-		/// <summary>Área 16:9 dentro da view, com uma folga: é o que o jogo ocupa no aparelho.</summary>
+		/// <summary>
+		/// Área do jogo dentro da view, com uma folga: é o que o jogo ocupa no aparelho — 16:9, ou a
+		/// tela toda com o widescreen ligado.
+		/// </summary>
 		private void UpdateGameRect()
 		{
 			float padding = 10f * (Resources?.DisplayMetrics?.Density ?? 1f);
 			float availableWidth = MathF.Max(1f, Width - padding * 2f);
 			float availableHeight = MathF.Max(1f, Height - padding * 2f);
-			float width = MathF.Min(availableWidth, availableHeight * 16f / 9f);
-			float height = width * 9f / 16f;
+			float aspect = Context != null && LauncherPrefs.Widescreen(Context)
+				? MathF.Max(16f / 9f, availableWidth / availableHeight)
+				: 16f / 9f;
+			float width = MathF.Min(availableWidth, availableHeight * aspect);
+			float height = width / aspect;
 			if (height > availableHeight)
 			{
 				height = availableHeight;
-				width = height * 16f / 9f;
+				width = height * aspect;
 			}
 			float centerX = Width / 2f;
 			float centerY = Height / 2f;

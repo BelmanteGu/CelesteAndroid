@@ -50,6 +50,7 @@ namespace CelesteAndroid
 		private TextView driverToggle = null!;
 		private TextView touchToggle = null!;
 		private TextView layoutLink = null!;
+		private TextView wideToggle = null!;
 		private LinearLayout settings = null!;
 		private TextView hint = null!;
 		private FrameLayout root = null!;
@@ -193,6 +194,8 @@ namespace CelesteAndroid
 			driverToggle.Click += (_, _) => ToggleDriver();
 			touchToggle = LinkText("");
 			touchToggle.Click += (_, _) => ToggleTouch();
+			wideToggle = LinkText("");
+			wideToggle.Click += (_, _) => ToggleWidescreen();
 			layoutLink = LinkText("Layout");
 			layoutLink.Click += (_, _) => OpenTouchLayout();
 			links.AddView(openZip);
@@ -209,6 +212,8 @@ namespace CelesteAndroid
 			settings.AddView(touchToggle);
 			settings.AddView(Separator());
 			settings.AddView(layoutLink);
+			settings.AddView(Separator());
+			settings.AddView(wideToggle);
 			panel.AddView(settings, Margins(top: 2, left: 6));
 
 			progressBox = new LinearLayout(this) { Orientation = Orientation.Vertical, Visibility = ViewStates.Gone };
@@ -343,6 +348,7 @@ namespace CelesteAndroid
 			}
 			driverToggle.Text = "Graphics: " + (LauncherPrefs.Driver(this) == "OpenGL" ? "OpenGL ES" : "Vulkan");
 			touchToggle.Text = "Touch: " + (LauncherPrefs.TouchControls(this) ? "On" : "Off");
+			wideToggle.Text = "Wide: " + (LauncherPrefs.Widescreen(this) ? "On" : "Off");
 		}
 
 		private void Play()
@@ -358,6 +364,12 @@ namespace CelesteAndroid
 		{
 			// Vazio = deixa o FNA escolher (SDL_GPU → Vulkan); "OpenGL" força o OpenGL ES.
 			LauncherPrefs.SetDriver(this, LauncherPrefs.Driver(this) == "OpenGL" ? "" : "OpenGL");
+			RefreshState();
+		}
+
+		private void ToggleWidescreen()
+		{
+			LauncherPrefs.SetWidescreen(this, !LauncherPrefs.Widescreen(this));
 			RefreshState();
 		}
 
