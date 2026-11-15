@@ -202,6 +202,42 @@ namespace CelesteAndroid
 			return saves.Count;
 		}
 
+		/// <summary>
+		/// Copia os .celeste daqui para uma pasta escolhida pelo jogador (issue #6), para levar o
+		/// progresso de volta ao PC: o conteúdo vai na pasta Saves do jogo no PC. Arquivos com o mesmo
+		/// nome na pasta de destino são substituídos.
+		/// </summary>
+		public int ExportSaves(Uri treeUri)
+		{
+			progress("Exporting saves…", -1);
+			string source = Path.Combine(UserDir(context), "Celeste", "Saves");
+			string[] saves = Directory.Exists(source) ? Directory.GetFiles(source, "*.celeste") : Array.Empty<string>();
+			if (saves.Length == 0)
+				throw new InstallException("There are no saves to export yet.");
+
+			ContentResolver resolver = context.ContentResolver!;
+			string rootId = DocumentsContract.GetTreeDocumentId(treeUri)!;
+			Uri parent = DocumentsContract.BuildDocumentUriUsingTree(treeUri, rootId)!;
+			List<Doc> existing = ListChildren(treeUri, rootId);
+
+			foreach (string save in saves)
+			{
+				string name = Path.GetFileName(save);
+				Doc? same = existing.FirstOrDefault(d => !d.IsDir && d.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+				Uri? target = same is Doc doc
+					? DocumentsContract.BuildDocumentUriUsingTree(treeUri, doc.Id)
+					: DocumentsContract.CreateDocument(resolver, parent, "application/octet-stream", name);
+				if (target == null)
+					throw new InstallException($"Could not create {name} in that folder.");
+				// "wt": trunca o arquivo existente em vez de escrever por cima do começo dele.
+				using Stream output = resolver.OpenOutputStream(target, "wt")
+					?? throw new InstallException($"Could not write {name} in that folder.");
+				using FileStream input = File.OpenRead(save);
+				input.CopyTo(output);
+			}
+			return saves.Length;
+		}
+
 		private void CheckFnaBuild(bool hasFna)
 		{
 			if (!hasFna)

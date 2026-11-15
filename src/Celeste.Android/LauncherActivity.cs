@@ -34,6 +34,7 @@ namespace CelesteAndroid
 		private const int RequestFolder = 1;
 		private const int RequestZip = 2;
 		private const int RequestSaves = 3;
+		private const int RequestExportSaves = 4;
 
 		private static readonly Color Night = Color.ParseColor("#120C22");
 		private static readonly Color Accent = Color.ParseColor("#F2B8D8");
@@ -45,6 +46,7 @@ namespace CelesteAndroid
 		private Button openFolder = null!;
 		private TextView openZip = null!;
 		private TextView importSaves = null!;
+		private TextView exportSaves = null!;
 		private TextView driverToggle = null!;
 		private TextView touchToggle = null!;
 		private TextView layoutLink = null!;
@@ -185,6 +187,8 @@ namespace CelesteAndroid
 			openZip.Click += (_, _) => PickZip();
 			importSaves = LinkText("Import saves");
 			importSaves.Click += (_, _) => StartActivityForResult(new Intent(Intent.ActionOpenDocumentTree), RequestSaves);
+			exportSaves = LinkText("Export saves");
+			exportSaves.Click += (_, _) => StartActivityForResult(new Intent(Intent.ActionOpenDocumentTree), RequestExportSaves);
 			driverToggle = LinkText("");
 			driverToggle.Click += (_, _) => ToggleDriver();
 			touchToggle = LinkText("");
@@ -194,6 +198,8 @@ namespace CelesteAndroid
 			links.AddView(openZip);
 			links.AddView(Separator());
 			links.AddView(importSaves);
+			links.AddView(Separator());
+			links.AddView(exportSaves);
 			panel.AddView(links, Margins(top: 6, left: 6));
 
 			// Uma linha só não cabe: "Layout" ficava fora da tela e era impossível de tocar.
@@ -320,6 +326,7 @@ namespace CelesteAndroid
 			openFolder.Enabled = !busy;
 			openZip.Enabled = !busy;
 			importSaves.Enabled = !busy;
+			exportSaves.Enabled = !busy && installed;
 			// A tela é baixa (~360dp): durante a instalação a barra de progresso ocupa o lugar dos links.
 			links.Visibility = busy ? ViewStates.Gone : ViewStates.Visible;
 			settings.Visibility = busy ? ViewStates.Gone : ViewStates.Visible;
@@ -480,6 +487,8 @@ namespace CelesteAndroid
 				RunInstall(installer => installer.ImportZip(uri));
 			else if (requestCode == RequestSaves)
 				RunJob(installer => $"✓  Imported {installer.ImportSaves(uri)} save file(s)");
+			else if (requestCode == RequestExportSaves)
+				RunJob(installer => $"✓  Exported {installer.ExportSaves(uri)} save file(s)");
 		}
 
 		/// <summary>Importação do jogo: cópia → patch → fundo.</summary>
