@@ -21,6 +21,12 @@ namespace CelesteAndroid
 		/// <summary>Widescreen ("1"/"0"): o jogo ocupa a tela toda em vez de 16:9. Ligado por padrão.</summary>
 		public const string WidescreenKey = "wide";
 
+		/// <summary>
+		/// Abrir o jogo direto ("1"/"0"), sem passar pela tela do Play. Desligado por padrão: a tela
+		/// inicial é onde ficam o backup dos saves e a importação dos saves do PC.
+		/// </summary>
+		public const string DirectStartKey = "direct";
+
 		/// <summary>Posição dos controles (ver TouchLayoutSpec.Encode); vazio = padrão.</summary>
 		public const string TouchLayoutKey = "touch_layout";
 
@@ -38,6 +44,11 @@ namespace CelesteAndroid
 
 		public static void SetTouchControls(Context context, bool enabled) =>
 			Get(context).Edit()!.PutString(TouchKey, enabled ? "1" : "0")!.Apply();
+
+		public static bool DirectStart(Context context) => Get(context).GetString(DirectStartKey, "0") == "1";
+
+		public static void SetDirectStart(Context context, bool enabled) =>
+			Get(context).Edit()!.PutString(DirectStartKey, enabled ? "1" : "0")!.Apply();
 
 		public static bool Widescreen(Context context) => Get(context).GetString(WidescreenKey, "1") != "0";
 

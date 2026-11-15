@@ -43,6 +43,7 @@ namespace CelesteAndroid
 		private View selectActions = null!;
 		private Button playButton = null!;
 		private View settingsChip = null!;
+		private TextView directChip = null!;
 		private View channelBadge = null!;
 		private LinearLayout progressBox = null!;
 		private ProgressBar progressBar = null!;
@@ -77,10 +78,6 @@ namespace CelesteAndroid
 			root.AddView(progressBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent,
 				GravityFlags.Bottom | GravityFlags.CenterHorizontal) { BottomMargin = Dp(34) });
 
-			settingsChip = Chip("Settings");
-			settingsChip.Click += (_, _) => OpenSettings();
-			root.AddView(settingsChip, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent,
-				GravityFlags.Bottom | GravityFlags.Start) { LeftMargin = Dp(20), BottomMargin = Dp(18) });
 
 			channelBadge = BuildChannelBadge();
 			root.AddView(channelBadge, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent,
@@ -171,6 +168,28 @@ namespace CelesteAndroid
 			// conteúdo encostava na esquerda.
 			readyScreen.AddView(hero, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent));
 
+			// Saves e opções sempre à vista na tela inicial: backup, saves do PC e o "abrir direto".
+			var home = new LinearLayout(this) { Orientation = Orientation.Horizontal };
+			home.SetGravity(GravityFlags.CenterHorizontal);
+			var importPc = Chip("Import PC saves");
+			importPc.Click += (_, _) => StartActivityForResult(new Intent(Intent.ActionOpenDocumentTree), RequestSaves);
+			var backup = Chip("Backup saves");
+			backup.Click += (_, _) => StartActivityForResult(new Intent(Intent.ActionOpenDocumentTree), RequestExportSaves);
+			var settings = Chip("Settings");
+			settings.Click += (_, _) => OpenSettings();
+			directChip = Chip("");
+			directChip.Click += (_, _) =>
+			{
+				LauncherPrefs.SetDirectStart(this, !LauncherPrefs.DirectStart(this));
+				RefreshState();
+			};
+			home.AddView(importPc);
+			home.AddView(backup, Wrap(left: 8));
+			home.AddView(directChip, Wrap(left: 8));
+			home.AddView(settings, Wrap(left: 8));
+			settingsChip = home;
+			readyScreen.AddView(home, Wrap(top: 22));
+
 			readyStatus = Label("", 12, Muted);
 			readyStatus.Gravity = GravityFlags.CenterHorizontal;
 			readyScreen.AddView(readyStatus, Wrap(top: 10));
@@ -248,7 +267,6 @@ namespace CelesteAndroid
 			View hide = installed ? pickScreen : readyScreen;
 			hide.Visibility = ViewStates.Gone;
 			show.Visibility = ViewStates.Visible;
-			settingsChip.Visibility = installed ? ViewStates.Visible : ViewStates.Gone;
 
 			// Na seleção o véu é mais escuro (texto em cima da arte); no Play a arte aparece mais.
 			veil.Background = installed
@@ -271,7 +289,9 @@ namespace CelesteAndroid
 			selectActions.Visibility = busy ? ViewStates.Invisible : ViewStates.Visible;
 			playButton.Enabled = !busy;
 			playButton.Alpha = busy ? 0.45f : 1f;
-			settingsChip.Enabled = !busy;
+			settingsChip.Visibility = busy ? ViewStates.Invisible : ViewStates.Visible;
+			directChip.Text = "Start directly: " + (LauncherPrefs.DirectStart(this) ? "On" : "Off");
+			directChip.SetTextColor(LauncherPrefs.DirectStart(this) ? Ice : Muted);
 			RefreshSettings();
 		}
 

@@ -16,6 +16,7 @@ namespace CelesteAndroid
 		private TextView? driverValue;
 		private TextView? touchValue;
 		private TextView? wideValue;
+		private TextView? directValue;
 
 		private void OpenSettings()
 		{
@@ -44,6 +45,7 @@ namespace CelesteAndroid
 			driverValue = Toggle(game, "Graphics", ToggleDriver);
 			touchValue = Toggle(game, "Touch controls", ToggleTouch);
 			wideValue = Toggle(game, "Widescreen", ToggleWidescreen);
+			directValue = Toggle(game, "Open game directly", () => LauncherPrefs.SetDirectStart(this, !LauncherPrefs.DirectStart(this)));
 			AddAction(game, "Edit touch layout", OpenTouchLayout);
 			columns.AddView(game, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f));
 
@@ -56,7 +58,7 @@ namespace CelesteAndroid
 
 			panel.AddView(columns, Wrap(top: 14));
 
-			var hint = Label("Tip: long-press the app icon → Settings opens this panel without starting the game.", 10, Muted);
+			var hint = Label("With \"Open game directly\" on, long-press the app icon → Settings to come back here.", 10, Muted);
 			panel.AddView(hint, Wrap(top: 12));
 
 			overlay = panel;
@@ -69,7 +71,8 @@ namespace CelesteAndroid
 			if (overlay != null && root != null)
 				root.RemoveView(overlay);
 			overlay = null;
-			driverValue = touchValue = wideValue = null;
+			driverValue = touchValue = wideValue = directValue = null;
+			RefreshState();
 		}
 
 		public override void OnBackPressed()
@@ -90,6 +93,8 @@ namespace CelesteAndroid
 				touchValue.Text = LauncherPrefs.TouchControls(this) ? "On" : "Off";
 			if (wideValue != null)
 				wideValue.Text = LauncherPrefs.Widescreen(this) ? "On" : "Off";
+			if (directValue != null)
+				directValue.Text = LauncherPrefs.DirectStart(this) ? "On" : "Off";
 		}
 
 		private LinearLayout Column(string title)

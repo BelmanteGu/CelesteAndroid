@@ -14,12 +14,12 @@ namespace CelesteAndroid
 	/// Launcher. Fluxo:
 	/// <list type="number">
 	/// <item>Sem o jogo: tela "Select game files" (pasta da versão FNA da Steam ou .zip).</item>
-	/// <item>Depois de importar: logo + Play.</item>
-	/// <item>Daí em diante o app abre o jogo direto, sem passar pelo launcher.</item>
+	/// <item>Com o jogo importado: logo + Play, e embaixo os saves (importar do PC, exportar) e
+	/// as configurações.</item>
+	/// <item>Opcional ("Open game directly"): o app abre o jogo direto, sem a tela do Play. O atalho
+	/// "Settings" do ícone (toque longo) continua levando ao launcher.</item>
 	/// </list>
-	/// As configurações (controles, widescreen, saves, arquivos do jogo) ficam no atalho "Settings"
-	/// do ícone (toque longo) e no botão Settings da tela do Play. O visual está em LauncherUi.cs e
-	/// as configurações em LauncherSettings.cs.
+	/// O visual está em LauncherUi.cs e as configurações em LauncherSettings.cs.
 	/// </summary>
 	[Activity(
 		Name = "org.celesteandroid.celeste.LauncherActivity",
@@ -55,8 +55,8 @@ namespace CelesteAndroid
 			PublishShortcuts();
 			settingsRequested = Intent?.Action == ActionSettings;
 
-			// Jogo instalado e com o patch desta versão: o app abre o jogo direto.
-			if (!settingsRequested && CanLaunchDirectly())
+			// Opção "Open game directly", jogo instalado e com o patch desta versão: pula a tela do Play.
+			if (!settingsRequested && LauncherPrefs.DirectStart(this) && CanLaunchDirectly())
 			{
 				LaunchGame();
 				return;
@@ -102,7 +102,7 @@ namespace CelesteAndroid
 				RunInstall(installer => installer.ImportEmbedded());
 			}
 			// APK novo com um módulo de patches diferente: refaz o patch e, se ninguém pediu as
-			// configurações, abre o jogo em seguida (o app "abre direto" também depois de atualizar).
+			// configurações e o "abrir direto" está ligado, abre o jogo em seguida.
 			else if (!busy && !repatchTried && installed && !GameInstaller.IsPatchCurrent(this))
 			{
 				repatchTried = true;
@@ -110,7 +110,7 @@ namespace CelesteAndroid
 				{
 					Repatch(installer);
 					return "Game updated for this version";
-				}, launchAfter: !settingsRequested);
+				}, launchAfter: !settingsRequested && LauncherPrefs.DirectStart(this));
 			}
 			else if (settingsRequested)
 			{

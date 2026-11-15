@@ -49,7 +49,7 @@ More in [docs/WIDESCREEN.md](docs/WIDESCREEN.md).
 | 🔊 **Full audio** | FMOD Studio 1.10.14, the version the game's sound banks were built with. |
 | 🖥️ **Widescreen** | The game takes your screen's aspect ratio (19.5:9, 20:9, 21:9…): more of the level on the sides, no black bars. Menus and dialogue stay centred. Can be turned off. |
 | 🎮 **Touch controls** | Stick + grab / dash / jump / journal / retry, an always-visible pause button and a keyboard button. They fade when idle, work alongside a controller, and an editor lets you drag and resize each control (left-handed mode included). |
-| 📦 **Simple launcher** | Select your game files once, tap **Play**, and from then on the app opens straight into the game. |
+| 📦 **Simple launcher** | Select your game files once and tap **Play**. Your saves are right on the home screen (import from PC, backup), and *Start directly* skips the launcher if you prefer. |
 | 💾 **Your saves** | Import your PC saves and export them back to the PC whenever you want. |
 | 🔒 **Your files stay yours** | The original `Celeste.exe` is never modified. A patched copy is made on the device with [MonoMod](https://github.com/MonoMod/MonoMod), the tooling the [Everest](https://everestapi.github.io/) mod loader uses. |
 
@@ -76,10 +76,10 @@ You need the **FNA build** of the PC version. Its folder has `Celeste.exe`, **`F
 3. Open **Celeste**, tap **Select game files** (or *import a .zip*) and pick it.
 4. Wait for the import (copy + patch, 1–2 minutes) and tap **Play**.
 
-From then on, opening the app starts the game directly. **Settings** (graphics, touch controls and layout, widescreen, saves, game files) are one long-press away: long-press the app icon → *Settings*.
+The home screen keeps your saves at hand (**Import PC saves**, **Backup saves**) and opens **Settings** (graphics, touch controls and layout, widescreen, game files). Turn on **Start directly** to skip the home screen and open straight into the game; long-press the app icon → *Settings* to get back to it.
 
 > [!NOTE]
-> Your saves live in the app's private storage, and **uninstalling the app deletes them**. Use *Settings → Export saves* to keep a copy (the files go straight into the `Saves` folder of the PC game), and *Import saves* to bring your PC progress over. Android's cloud backup keeps the saves and the settings, never the ~1.1 GB of game files.
+> Your saves live in the app's private storage, and **uninstalling the app deletes them**. Use **Backup saves** to keep a copy (the files go straight into the `Saves` folder of the PC game), and *Import saves* to bring your PC progress over. Android's cloud backup keeps the saves and the settings, never the ~1.1 GB of game files.
 
 Updating the app doesn't require importing again: if the new APK ships a newer patch, the game is re-patched on first open (a few seconds) and starts right after.
 
