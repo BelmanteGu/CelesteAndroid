@@ -6,8 +6,8 @@
 		<RootNamespace>CelesteAndroid</RootNamespace>
 		<ApplicationId>org.celesteandroid.celeste</ApplicationId>
 		<ApplicationTitle>Celeste</ApplicationTitle>
-		<ApplicationVersion>3</ApplicationVersion>
-		<ApplicationDisplayVersion>1.0.1</ApplicationDisplayVersion>
+		<ApplicationVersion>4</ApplicationVersion>
+		<ApplicationDisplayVersion>1.1.0</ApplicationDisplayVersion>
 		<RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
 		<!-- APK instalável via adb install mesmo em Debug (sem Fast Deployment). -->
 		<EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>

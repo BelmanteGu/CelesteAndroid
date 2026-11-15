@@ -167,7 +167,9 @@ namespace CelesteAndroid
 			playButton.SetPadding(Dp(34), 0, Dp(38), 0);
 			playButton.Click += (_, _) => LaunchGame();
 			hero.AddView(playButton, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, Dp(64)) { LeftMargin = Dp(44) });
-			readyScreen.AddView(hero);
+			// Sem parâmetros explícitos, o LinearLayout vertical estica o filho na largura toda e o
+			// conteúdo encostava na esquerda.
+			readyScreen.AddView(hero, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent));
 
 			readyStatus = Label("", 12, Muted);
 			readyStatus.Gravity = GravityFlags.CenterHorizontal;

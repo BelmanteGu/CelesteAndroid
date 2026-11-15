@@ -254,6 +254,12 @@ namespace CelesteAndroid
 					LoadArt();
 					ShowScreen(animate: true);
 					SetStatus(error ?? success, error != null);
+					// O atalho "Settings" pode ter chegado durante o patch.
+					if (settingsRequested && GameInstaller.IsInstalled(this))
+					{
+						settingsRequested = false;
+						OpenSettings();
+					}
 				});
 			}) { Name = "CelesteInstall", IsBackground = true }.Start();
 		}
