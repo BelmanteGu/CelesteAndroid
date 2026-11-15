@@ -12,7 +12,12 @@ CelesteAndroid is built on the following components. Each one keeps its own lice
 | [MonoMod](https://github.com/MonoMod/MonoMod) | Patching `Celeste.exe` into `Celeste.dll` | MIT | NuGet |
 | [Mono.Cecil](https://github.com/jbevain/cecil) | Assembly reading/writing (through MonoMod) | MIT | NuGet |
 | [.NET for Android](https://github.com/dotnet/android) | Runtime and Android bindings | MIT | .NET SDK |
+| [Pixelify Sans](https://github.com/eifetx/Pixelify-Sans) | Launcher font | SIL OFL 1.1 | `src/Celeste.Android/Resources/font/pixelify_sans.ttf` |
 | **FMOD Studio 1.10.14** | Game audio (the game's sound banks require it) | **Proprietary** (Firelight Technologies) | Not in this repository; bundled in the released APK |
+
+## Pixelify Sans
+
+Copyright 2021 The Pixelify Sans Project Authors (https://github.com/eifetx/Pixelify-Sans). Licensed under the SIL Open Font License, Version 1.1: https://openfontlicense.org. The font file is redistributed unmodified.
 
 ## FMOD
 

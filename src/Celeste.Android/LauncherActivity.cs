@@ -1,23 +1,25 @@
 using System;
-using System.IO;
 using System.Threading;
 using Android.App;
 using Android.Content;
 using Android.Content.PM;
-using Android.Graphics;
-using Android.Graphics.Drawables;
 using Android.OS;
 using Android.Util;
 using Android.Views;
-using Android.Views.Animations;
-using Android.Widget;
-using Color = Android.Graphics.Color;
 using Uri = Android.Net.Uri;
 
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// Tela inicial: key art do jogo, importação dos arquivos do jogo e botão de jogar.
+	/// Launcher. Fluxo:
+	/// <list type="number">
+	/// <item>Sem o jogo: tela "Select game files" (pasta da versão FNA da Steam ou .zip).</item>
+	/// <item>Depois de importar: logo + Play.</item>
+	/// <item>Daí em diante o app abre o jogo direto, sem passar pelo launcher.</item>
+	/// </list>
+	/// As configurações (controles, widescreen, saves, arquivos do jogo) ficam no atalho "Settings"
+	/// do ícone (toque longo) e no botão Settings da tela do Play. O visual está em LauncherUi.cs e
+	/// as configurações em LauncherSettings.cs.
 	/// </summary>
 	[Activity(
 		Name = "org.celesteandroid.celeste.LauncherActivity",
@@ -29,67 +31,64 @@ namespace CelesteAndroid
 		LaunchMode = LaunchMode.SingleTop,
 		ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.ScreenLayout
 			| ConfigChanges.Keyboard | ConfigChanges.KeyboardHidden | ConfigChanges.Navigation)]
-	public class LauncherActivity : Activity
+	public partial class LauncherActivity : Activity
 	{
+		/// <summary>Ação do atalho "Settings": abre o launcher em vez do jogo.</summary>
+		public const string ActionSettings = "org.celesteandroid.celeste.SETTINGS";
+
 		private const int RequestFolder = 1;
 		private const int RequestZip = 2;
 		private const int RequestSaves = 3;
 		private const int RequestExportSaves = 4;
 
-		private static readonly Color Night = Color.ParseColor("#120C22");
-		private static readonly Color Accent = Color.ParseColor("#F2B8D8");
+		// Uma tentativa de refazer o patch por processo: se falhar, o erro fica na tela e o Play
+		// continua livre, em vez de refazer tudo a cada volta ao launcher.
+		private static bool repatchTried;
 
-		private ImageView art = null!;
-		private LinearLayout panel = null!;
-		private TextView status = null!;
-		private Button play = null!;
-		private Button openFolder = null!;
-		private TextView openZip = null!;
-		private TextView importSaves = null!;
-		private TextView exportSaves = null!;
-		private TextView driverToggle = null!;
-		private TextView touchToggle = null!;
-		private TextView layoutLink = null!;
-		private TextView wideToggle = null!;
-		private LinearLayout settings = null!;
-		private TextView hint = null!;
-		private FrameLayout root = null!;
-		private View? touchOverlay;
-		private LinearLayout links = null!;
-		private LinearLayout progressBox = null!;
-		private ProgressBar progressBar = null!;
-		private TextView progressText = null!;
 		private bool busy;
+		private bool settingsRequested;
+		private bool launching;
 
 		protected override void OnCreate(Bundle? savedInstanceState)
 		{
 			base.OnCreate(savedInstanceState);
+			PublishShortcuts();
+			settingsRequested = Intent?.Action == ActionSettings;
+
+			// Jogo instalado e com o patch desta versão: o app abre o jogo direto.
+			if (!settingsRequested && CanLaunchDirectly())
+			{
+				LaunchGame();
+				return;
+			}
+
 			SetContentView(BuildLayout());
 			HideSystemBars();
 			LoadArt();
+			ShowScreen(animate: true);
+		}
 
-			// "Splash": a arte aparece sozinha e o painel entra logo depois.
-			panel.Alpha = 0f;
-			panel.TranslationX = -Dp(32);
-			panel.Animate()!.Alpha(1f).TranslationX(0f).SetStartDelay(650).SetDuration(550)
-				.SetInterpolator(new DecelerateInterpolator(2f))!.Start();
-
-			var zoom = new ScaleAnimation(1f, 1.08f, 1f, 1.08f, Dimension.RelativeToSelf, 0.5f, Dimension.RelativeToSelf, 0.4f)
+		protected override void OnNewIntent(Intent? intent)
+		{
+			base.OnNewIntent(intent);
+			Intent = intent;
+			if (intent?.Action == ActionSettings && root != null)
 			{
-				Duration = 24000,
-				RepeatCount = Animation.Infinite,
-				RepeatMode = RepeatMode.Reverse,
-				Interpolator = new AccelerateDecelerateInterpolator(),
-			};
-			art.StartAnimation(zoom);
+				OpenSettings();
+			}
 		}
 
 		protected override void OnResume()
 		{
 			base.OnResume();
+			if (launching || root == null)
+			{
+				return;
+			}
 			HideSystemBars();
 			RefreshState();
 
+			bool installed = GameInstaller.IsInstalled(this);
 			// Desenvolvimento: arquivos já copiados por scripts/deploy-android.ps1; só patch + fundo.
 			// adb shell am start -n org.celesteandroid.celeste/.LauncherActivity --ez repatch true
 			if (!busy && Intent!.GetBooleanExtra("repatch", false))
@@ -98,385 +97,80 @@ namespace CelesteAndroid
 				RunInstall(_ => { });
 			}
 			// APK pessoal: o jogo já vem dentro do APK; instala sozinho na primeira abertura.
-			else if (!busy && !GameInstaller.IsInstalled(this) && GameInstaller.HasEmbeddedGame(this))
+			else if (!busy && !installed && GameInstaller.HasEmbeddedGame(this))
 			{
 				RunInstall(installer => installer.ImportEmbedded());
 			}
-			// APK novo com um módulo de patches diferente: o Celeste.dll instalado foi gerado por
-			// um patch antigo e roda sem as correções novas. Refaz o patch (sem reimportar o jogo).
-			// Uma tentativa por processo: se o patch falhar (ou a assinatura não puder ser lida), não
-			// refaz tudo a cada volta ao launcher — o erro já ficou na tela e o Play continua livre.
-			else if (!busy && !repatchTried && GameInstaller.IsInstalled(this) && !GameInstaller.IsPatchCurrent(this))
+			// APK novo com um módulo de patches diferente: refaz o patch e, se ninguém pediu as
+			// configurações, abre o jogo em seguida (o app "abre direto" também depois de atualizar).
+			else if (!busy && !repatchTried && installed && !GameInstaller.IsPatchCurrent(this))
 			{
 				repatchTried = true;
 				RunJob(installer =>
 				{
 					Repatch(installer);
-					RunOnUiThread(LoadArt);
-					return "✓  Game updated for this version";
-				});
+					return "Game updated for this version";
+				}, launchAfter: !settingsRequested);
+			}
+			else if (settingsRequested)
+			{
+				settingsRequested = false;
+				OpenSettings();
 			}
 		}
 
-		private static bool repatchTried;
+		private static bool CanLaunchDirectly(Context context) =>
+			GameInstaller.IsInstalled(context) && GameInstaller.IsPatchCurrent(context);
 
-		#region Layout
+		private bool CanLaunchDirectly() =>
+			CanLaunchDirectly(this) && !(Intent?.GetBooleanExtra("repatch", false) ?? false);
 
-		private View BuildLayout()
+		private void LaunchGame()
 		{
-			root = new FrameLayout(this);
-			root.SetBackgroundColor(Night);
-
-			art = new ImageView(this);
-			art.SetScaleType(ImageView.ScaleType.CenterCrop);
-			root.AddView(art, Match());
-
-			var shade = new View(this)
-			{
-				Background = new GradientDrawable(GradientDrawable.Orientation.LeftRight!, new int[]
-				{
-					Color.Argb(245, 18, 12, 34), Color.Argb(190, 18, 12, 34), Color.Argb(40, 18, 12, 34), Color.Argb(0, 0, 0, 0),
-				}),
-			};
-			root.AddView(shade, Match());
-
-			panel = new LinearLayout(this) { Orientation = Orientation.Vertical };
-			panel.SetGravity(GravityFlags.CenterVertical | GravityFlags.Start);
-			panel.SetPadding(Dp(56), Dp(12), Dp(24), Dp(12));
-			// 460dp é confortável em tablet, mas estoura a tela de um telefone (~360dp) e o que
-			// passa da borda não pode nem ser tocado: limita à largura visível.
-			int screenWidth = Resources?.DisplayMetrics?.WidthPixels ?? Dp(460);
-			int panelWidth = Math.Min(Dp(460), screenWidth - Dp(16));
-			root.AddView(panel, new FrameLayout.LayoutParams(panelWidth, ViewGroup.LayoutParams.MatchParent));
-
-			// Logo do jogo (art/logo.png → GameArt) ou, sem ele, o nome em texto.
-			int logoId = Resources!.GetIdentifier("celeste_logo", "drawable", PackageName);
-			if (logoId != 0)
-			{
-				var logo = new ImageView(this);
-				logo.SetImageResource(logoId);
-				logo.SetAdjustViewBounds(true);
-				logo.SetScaleType(ImageView.ScaleType.FitStart);
-				logo.Elevation = Dp(6);
-				panel.AddView(logo, new LinearLayout.LayoutParams(Dp(150), Dp(118)) { LeftMargin = -Dp(4) });
-			}
-			else
-			{
-				var title = Text("CELESTE", 54, Color.White, TypefaceStyle.Bold);
-				title.LetterSpacing = 0.18f;
-				title.SetShadowLayer(Dp(12), 0, Dp(2), Color.Argb(160, 0, 0, 0));
-				panel.AddView(title);
-			}
-
-			var subtitle = Text("Native Android port", 15, Accent, TypefaceStyle.Normal);
-			subtitle.LetterSpacing = 0.06f;
-			panel.AddView(subtitle, Margins(top: -4));
-
-			status = Text("", 14, Color.Argb(220, 255, 255, 255), TypefaceStyle.Normal);
-			panel.AddView(status, Margins(top: 10));
-
-			play = PillButton("PLAY", filled: true);
-			play.Click += (_, _) => Play();
-			panel.AddView(play, new LinearLayout.LayoutParams(Dp(260), Dp(50)) { TopMargin = Dp(14) });
-
-			openFolder = PillButton("Open game files", filled: false);
-			openFolder.Click += (_, _) => PickFolder();
-			panel.AddView(openFolder, new LinearLayout.LayoutParams(Dp(260), Dp(44)) { TopMargin = Dp(10) });
-
-			links = new LinearLayout(this) { Orientation = Orientation.Horizontal };
-			openZip = LinkText("Import .zip");
-			openZip.Click += (_, _) => PickZip();
-			importSaves = LinkText("Import saves");
-			importSaves.Click += (_, _) => StartActivityForResult(new Intent(Intent.ActionOpenDocumentTree), RequestSaves);
-			exportSaves = LinkText("Export saves");
-			exportSaves.Click += (_, _) => StartActivityForResult(new Intent(Intent.ActionOpenDocumentTree), RequestExportSaves);
-			driverToggle = LinkText("");
-			driverToggle.Click += (_, _) => ToggleDriver();
-			touchToggle = LinkText("");
-			touchToggle.Click += (_, _) => ToggleTouch();
-			wideToggle = LinkText("");
-			wideToggle.Click += (_, _) => ToggleWidescreen();
-			layoutLink = LinkText("Layout");
-			layoutLink.Click += (_, _) => OpenTouchLayout();
-			links.AddView(openZip);
-			links.AddView(Separator());
-			links.AddView(importSaves);
-			links.AddView(Separator());
-			links.AddView(exportSaves);
-			panel.AddView(links, Margins(top: 6, left: 6));
-
-			// Uma linha só não cabe: "Layout" ficava fora da tela e era impossível de tocar.
-			settings = new LinearLayout(this) { Orientation = Orientation.Horizontal };
-			settings.AddView(driverToggle);
-			settings.AddView(Separator());
-			settings.AddView(touchToggle);
-			settings.AddView(Separator());
-			settings.AddView(layoutLink);
-			settings.AddView(Separator());
-			settings.AddView(wideToggle);
-			panel.AddView(settings, Margins(top: 2, left: 6));
-
-			progressBox = new LinearLayout(this) { Orientation = Orientation.Vertical, Visibility = ViewStates.Gone };
-			progressBar = new ProgressBar(this, null, Android.Resource.Attribute.ProgressBarStyleHorizontal) { Max = 1000 };
-			progressBar.ProgressTintList = Android.Content.Res.ColorStateList.ValueOf(Accent);
-			progressBar.IndeterminateTintList = Android.Content.Res.ColorStateList.ValueOf(Accent);
-			progressText = Text("", 13, Color.Argb(210, 255, 255, 255), TypefaceStyle.Normal);
-			progressBox.AddView(progressBar, new LinearLayout.LayoutParams(Dp(260), Dp(8)));
-			progressBox.AddView(progressText, Margins(top: 6));
-			panel.AddView(progressBox, Margins(top: 12));
-
-			hint = Text("Controller recommended", 12, Color.Argb(150, 255, 255, 255), TypefaceStyle.Normal);
-			var hintParams = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent,
-				GravityFlags.Bottom | GravityFlags.End) { RightMargin = Dp(28), BottomMargin = Dp(20) };
-			root.AddView(hint, hintParams);
-
-			return root;
-		}
-
-		private void LoadArt()
-		{
-			// Arte embutida no build (GameArt/) ou, na versão compartilhável, a key art do jogo importado.
-			if (Resources!.GetIdentifier("celeste_art", "drawable", PackageName) != 0)
-			{
-				art.SetImageResource(Resource.Drawable.launcher_art);
-				return;
-			}
-			string imported = System.IO.Path.Combine(GameInstaller.GameDir(this), "Content", "Graphics", "SplashScreen.png");
-			if (File.Exists(imported))
-				art.SetImageBitmap(BitmapFactory.DecodeFile(imported, new BitmapFactory.Options { InSampleSize = 2 }));
-			else
-				art.SetImageResource(Resource.Drawable.launcher_art);
-		}
-
-		private Button PillButton(string label, bool filled)
-		{
-			var button = new Button(this) { Text = label, StateListAnimator = null };
-			button.SetAllCaps(false);
-			button.SetTextSize(ComplexUnitType.Sp, filled ? 18 : 15);
-			button.SetTypeface(Typeface.Create("sans-serif-medium", filled ? TypefaceStyle.Bold : TypefaceStyle.Normal), filled ? TypefaceStyle.Bold : TypefaceStyle.Normal);
-			button.LetterSpacing = filled ? 0.12f : 0.02f;
-			var shape = new GradientDrawable();
-			shape.SetCornerRadius(Dp(25));
-			if (filled)
-			{
-				shape.SetColor(Color.White);
-				button.SetTextColor(Night);
-			}
-			else
-			{
-				shape.SetColor(Color.Argb(40, 255, 255, 255));
-				shape.SetStroke(Dp(1.5f), Color.Argb(200, 255, 255, 255));
-				button.SetTextColor(Color.White);
-			}
-			button.Background = new RippleDrawable(Android.Content.Res.ColorStateList.ValueOf(Color.Argb(60, 242, 184, 216)), shape, null);
-			return button;
-		}
-
-		private TextView Text(string text, float sp, Color color, TypefaceStyle style)
-		{
-			var view = new TextView(this) { Text = text };
-			view.SetTextSize(ComplexUnitType.Sp, sp);
-			view.SetTextColor(color);
-			view.SetTypeface(Typeface.Create("sans-serif", style), style);
-			return view;
-		}
-
-		private TextView Separator() =>
-			Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal);
-
-		private TextView LinkText(string text)
-		{
-			var view = Text(text, 14, Accent, TypefaceStyle.Normal);
-			// Sem quebra de linha: "Touch: On" partia em duas linhas e empurrava o resto para fora.
-			view.SetSingleLine(true);
-			view.SetPadding(0, Dp(6), 0, Dp(6));
-			return view;
-		}
-
-		private static FrameLayout.LayoutParams Match() =>
-			new(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent);
-
-		private LinearLayout.LayoutParams Margins(int top = 0, int left = 0, int right = 0) =>
-			new(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
-			{
-				TopMargin = Dp(top), LeftMargin = Dp(left), RightMargin = Dp(right),
-			};
-
-		private int Dp(float dp) => (int)TypedValue.ApplyDimension(ComplexUnitType.Dip, dp, Resources!.DisplayMetrics);
-
-		private void HideSystemBars()
-		{
-			if (!OperatingSystem.IsAndroidVersionAtLeast(30))
-				return;
-			// A partir do Android 15 o app já é edge-to-edge por padrão.
-			if (!OperatingSystem.IsAndroidVersionAtLeast(35))
-				Window!.SetDecorFitsSystemWindows(false);
-			IWindowInsetsController? insets = Window!.InsetsController;
-			if (insets != null)
-			{
-				insets.Hide(WindowInsets.Type.SystemBars());
-				insets.SystemBarsBehavior = (int)WindowInsetsControllerBehavior.ShowTransientBarsBySwipe;
-			}
-		}
-
-		#endregion
-
-		#region Estado e ações
-
-		private void RefreshState()
-		{
-			bool installed = GameInstaller.IsInstalled(this);
-			play.Enabled = installed && !busy;
-			play.Alpha = play.Enabled ? 1f : 0.4f;
-			openFolder.Enabled = !busy;
-			openZip.Enabled = !busy;
-			importSaves.Enabled = !busy;
-			exportSaves.Enabled = !busy && installed;
-			// A tela é baixa (~360dp): durante a instalação a barra de progresso ocupa o lugar dos links.
-			links.Visibility = busy ? ViewStates.Gone : ViewStates.Visible;
-			settings.Visibility = busy ? ViewStates.Gone : ViewStates.Visible;
-			// "Controller recommended" deixa de fazer sentido com os controles na tela ligados.
-			hint.Visibility = !busy && installed && !LauncherPrefs.TouchControls(this)
-				? ViewStates.Visible
-				: ViewStates.Gone;
-			openFolder.Text = installed ? "Change game files" : "Open game files";
-			if (!busy)
-			{
-				status.Text = installed
-					? "✓  Ready to play"
-					: "Pick the folder of your Celeste PC copy (FNA / \"opengl\" build) or the itch.io .zip.";
-			}
-			driverToggle.Text = "Graphics: " + (LauncherPrefs.Driver(this) == "OpenGL" ? "OpenGL ES" : "Vulkan");
-			touchToggle.Text = "Touch: " + (LauncherPrefs.TouchControls(this) ? "On" : "Off");
-			wideToggle.Text = "Wide: " + (LauncherPrefs.Widescreen(this) ? "On" : "Off");
-		}
-
-		private void Play()
-		{
+			launching = true;
 			var intent = new Intent(this, typeof(GameActivity));
 			string? driver = LauncherPrefs.Driver(this);
 			if (!string.IsNullOrEmpty(driver))
 				intent.PutExtra(GameActivity.ExtraDriver, driver);
 			StartActivity(intent);
-		}
-
-		private void ToggleDriver()
-		{
-			// Vazio = deixa o FNA escolher (SDL_GPU → Vulkan); "OpenGL" força o OpenGL ES.
-			LauncherPrefs.SetDriver(this, LauncherPrefs.Driver(this) == "OpenGL" ? "" : "OpenGL");
-			RefreshState();
-		}
-
-		private void ToggleWidescreen()
-		{
-			LauncherPrefs.SetWidescreen(this, !LauncherPrefs.Widescreen(this));
-			RefreshState();
-		}
-
-		private void ToggleTouch()
-		{
-			LauncherPrefs.SetTouchControls(this, !LauncherPrefs.TouchControls(this));
-			RefreshState();
+			// O launcher sai da pilha: voltar do jogo fecha o app, e a próxima abertura já cai no jogo.
+			Finish();
+			OverridePendingTransition(0, 0);
 		}
 
 		/// <summary>
-		/// Editor das posições dos controles de toque ("Layout"): mostra a área do jogo e deixa
-		/// arrastar cada controle; o resultado vai para as preferências e o jogo lê pelo AppContext.
+		/// Atalho "Settings" no toque longo do ícone: com o jogo abrindo direto, é o caminho para as
+		/// configurações (e para sair de uma configuração que impeça o jogo de abrir).
 		/// </summary>
-		private void OpenTouchLayout()
+		private void PublishShortcuts()
 		{
-			if (touchOverlay != null)
-			{
+			if (!OperatingSystem.IsAndroidVersionAtLeast(25))
 				return;
+			try
+			{
+				var manager = (ShortcutManager?)GetSystemService(Java.Lang.Class.FromType(typeof(ShortcutManager)));
+				if (manager == null)
+					return;
+				var intent = new Intent(this, typeof(LauncherActivity)).SetAction(ActionSettings)!;
+				intent.AddFlags(ActivityFlags.NewTask | ActivityFlags.ClearTop);
+				var builder = new ShortcutInfo.Builder(this, "settings")
+					.SetShortLabel("Settings")!
+					.SetLongLabel("Launcher settings")!
+					.SetIntent(intent)!;
+				int icon = Resources!.GetIdentifier("ic_celeste", "mipmap", PackageName);
+				if (icon != 0)
+					builder.SetIcon(Android.Graphics.Drawables.Icon.CreateWithResource(this, icon));
+				manager.SetDynamicShortcuts(new[] { builder.Build()! });
 			}
-			TouchLayoutSpec initial = TouchLayoutSpec.TryParse(LauncherPrefs.TouchLayout(this), out TouchLayoutSpec parsed)
-				? parsed
-				: TouchLayoutSpec.Default;
-
-			var editor = new TouchLayoutEditor(this, initial);
-			var overlay = new LinearLayout(this) { Orientation = Orientation.Vertical };
-			overlay.SetBackgroundColor(Color.Argb(247, 18, 12, 34));
-			overlay.SetPadding(Dp(18), Dp(20), Dp(18), Dp(20));
-
-			overlay.AddView(Text("Touch layout", 22, Color.White, TypefaceStyle.Bold));
-			overlay.AddView(
-				Text("Drag each control where you want it. Pause stays visible even when the pad fades; the keyboard button opens the device keyboard so you can type in search boxes.",
-					13, Color.Argb(190, 255, 255, 255), TypefaceStyle.Normal),
-				Margins(top: 6)
-			);
-			overlay.AddView(editor, new LinearLayout.LayoutParams(
-				ViewGroup.LayoutParams.MatchParent, 0, 1f) { TopMargin = Dp(14), BottomMargin = Dp(10) });
-
-			var sizeLabel = Text("", 14, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
-			void ShowSize() => sizeLabel.Text = $"Size: {(int)Math.Round(editor.Scale * 100)}%";
-			ShowSize();
-
-			var sizeRow = new LinearLayout(this) { Orientation = Orientation.Horizontal };
-			var smaller = PillButton("A-", filled: false);
-			smaller.Click += (_, _) =>
+			catch (Exception e)
 			{
-				editor.Scale -= 0.05f;
-				ShowSize();
-			};
-			var bigger = PillButton("A+", filled: false);
-			bigger.Click += (_, _) =>
-			{
-				editor.Scale += 0.05f;
-				ShowSize();
-			};
-			sizeRow.AddView(smaller, new LinearLayout.LayoutParams(Dp(64), Dp(42)));
-			sizeRow.AddView(sizeLabel, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f)
-			{
-				LeftMargin = Dp(12),
-				TopMargin = Dp(10),
-			});
-			sizeRow.AddView(bigger, new LinearLayout.LayoutParams(Dp(64), Dp(42)));
-			overlay.AddView(sizeRow);
-
-			var actions = new LinearLayout(this) { Orientation = Orientation.Horizontal };
-			var reset = LinkText("Reset");
-			reset.Click += (_, _) =>
-			{
-				editor.Reset();
-				ShowSize();
-			};
-			var mirror = LinkText("Left-handed");
-			mirror.Click += (_, _) => editor.Mirror();
-			var cancel = LinkText("Cancel");
-			cancel.Click += (_, _) => CloseTouchLayout();
-			actions.AddView(reset);
-			actions.AddView(Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal), Margins(left: 10, right: 10));
-			actions.AddView(mirror);
-			actions.AddView(Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal), Margins(left: 10, right: 10));
-			actions.AddView(cancel);
-			actions.AddView(Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal), Margins(left: 10, right: 10));
-			var done = LinkText("Save");
-			done.Click += (_, _) =>
-			{
-				LauncherPrefs.SetTouchLayout(this, editor.Spec.Encode());
-				CloseTouchLayout();
-			};
-			actions.AddView(done);
-			overlay.AddView(actions, Margins(top: 12));
-
-			touchOverlay = overlay;
-			root.AddView(overlay, Match());
-			// O jogo lê o layout ao iniciar: salvar aqui já vale para a próxima partida.
-		}
-
-		private void CloseTouchLayout()
-		{
-			if (touchOverlay is View overlay)
-			{
-				root.RemoveView(overlay);
+				Log.Warn(GameActivity.LogTag, "atalho Settings: " + e.Message);
 			}
-			touchOverlay = null;
 		}
 
-		private void PickFolder()
-		{
-			StartActivityForResult(new Intent(Intent.ActionOpenDocumentTree), RequestFolder);
-		}
+		#region Importação
+
+		private void PickFolder() => StartActivityForResult(new Intent(Intent.ActionOpenDocumentTree), RequestFolder);
 
 		private void PickZip()
 		{
@@ -498,20 +192,19 @@ namespace CelesteAndroid
 			else if (requestCode == RequestZip)
 				RunInstall(installer => installer.ImportZip(uri));
 			else if (requestCode == RequestSaves)
-				RunJob(installer => $"✓  Imported {installer.ImportSaves(uri)} save file(s)");
+				RunJob(installer => $"Imported {installer.ImportSaves(uri)} save file(s)");
 			else if (requestCode == RequestExportSaves)
-				RunJob(installer => $"✓  Exported {installer.ExportSaves(uri)} save file(s)");
+				RunJob(installer => $"Exported {installer.ExportSaves(uri)} save file(s)");
 		}
 
-		/// <summary>Importação do jogo: cópia → patch → fundo.</summary>
+		/// <summary>Importação do jogo: cópia → patch → fundo. Ao terminar, a tela do Play aparece.</summary>
 		private void RunInstall(Action<GameInstaller> import)
 		{
 			RunJob(installer =>
 			{
 				import(installer);
 				Repatch(installer);
-				RunOnUiThread(LoadArt);
-				return "✓  Game imported! Ready to play";
+				return "Game imported! Ready to play";
 			});
 		}
 
@@ -522,20 +215,14 @@ namespace CelesteAndroid
 			installer.PrepareBackground();
 		}
 
-		/// <summary>Roda uma tarefa do instalador fora da thread de UI, com progresso; devolve a mensagem de sucesso.</summary>
-		private void RunJob(Func<GameInstaller, string> job)
+		/// <summary>Roda uma tarefa do instalador fora da thread de UI, com progresso.</summary>
+		private void RunJob(Func<GameInstaller, string> job, bool launchAfter = false)
 		{
 			busy = true;
-			progressBox.Visibility = ViewStates.Visible;
+			ShowProgress("Working…", -1);
 			RefreshState();
 
-			var installer = new GameInstaller(this, (message, fraction) => RunOnUiThread(() =>
-			{
-				progressText.Text = message;
-				progressBar.Indeterminate = fraction < 0;
-				if (fraction >= 0)
-					progressBar.Progress = (int)(fraction * 1000);
-			}));
+			var installer = new GameInstaller(this, (message, fraction) => RunOnUiThread(() => ShowProgress(message, fraction)));
 
 			new Thread(() =>
 			{
@@ -558,13 +245,34 @@ namespace CelesteAndroid
 				RunOnUiThread(() =>
 				{
 					busy = false;
-					progressBox.Visibility = ViewStates.Gone;
-					RefreshState();
-					status.Text = error ?? success;
+					HideProgress();
+					if (error == null && launchAfter)
+					{
+						LaunchGame();
+						return;
+					}
+					LoadArt();
+					ShowScreen(animate: true);
+					SetStatus(error ?? success, error != null);
 				});
 			}) { Name = "CelesteInstall", IsBackground = true }.Start();
 		}
 
 		#endregion
+
+		private void HideSystemBars()
+		{
+			if (!OperatingSystem.IsAndroidVersionAtLeast(30))
+				return;
+			// A partir do Android 15 o app já é edge-to-edge por padrão.
+			if (!OperatingSystem.IsAndroidVersionAtLeast(35))
+				Window!.SetDecorFitsSystemWindows(false);
+			IWindowInsetsController? insets = Window!.InsetsController;
+			if (insets != null)
+			{
+				insets.Hide(WindowInsets.Type.SystemBars());
+				insets.SystemBarsBehavior = (int)WindowInsetsControllerBehavior.ShowTransientBarsBySwipe;
+			}
+		}
 	}
 }
